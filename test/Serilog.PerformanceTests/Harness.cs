@@ -91,11 +91,16 @@ namespace Serilog.PerformanceTests
         {
             BenchmarkRunner.Run<MessageTemplateRenderingBenchmark>();
         }
-
         [Fact]
         public void Binding()
         {
             BenchmarkRunner.Run<BindingBenchmark>();
+        }
+
+        [Fact]
+        public void PropertyBinder()
+        {
+            BenchmarkRunner.Run<PropertyBinderBenchmark>();
         }
     }
 }

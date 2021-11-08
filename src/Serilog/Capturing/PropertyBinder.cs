@@ -40,6 +40,88 @@ namespace Serilog.Capturing
         /// represented in the message template.</param>
         /// <returns>A list of properties; if the template is malformed then
         /// this will be empty.</returns>
+        public EventProperty[] ConstructPropertiesWithoutExtraArgs(MessageTemplate messageTemplate, object?[]? messageTemplateParameters)
+        {
+            if (messageTemplateParameters == null || messageTemplateParameters.Length == 0)
+            {
+                if (messageTemplate.NamedProperties != null || messageTemplate.PositionalProperties != null)
+                    SelfLog.WriteLine("Required properties not provided for: {0}", messageTemplate);
+
+                return NoProperties;
+            }
+
+            if (messageTemplate.PositionalProperties != null)
+            {
+                return ConstructPositionalPropertiesWithoutExtraArgs(messageTemplate, messageTemplateParameters);
+            }
+
+            return ConstructNamedPropertiesWithoutExtraArgs(messageTemplate, messageTemplateParameters!);
+        }
+
+        EventProperty[] ConstructPositionalPropertiesWithoutExtraArgs(MessageTemplate template, object?[] messageTemplateParameters)
+        {
+            var positionalProperties = template.PositionalProperties;
+
+            if (positionalProperties.Length != messageTemplateParameters.Length)
+                SelfLog.WriteLine("Positional property count does not match parameter count: {0}", template);
+
+            var result = new EventProperty[messageTemplateParameters.Length];
+            foreach (var property in positionalProperties)
+            {
+                if (property.TryGetPositionalValue(out var position))
+                {
+                    if (position < 0 || position >= messageTemplateParameters.Length)
+                        SelfLog.WriteLine("Unassigned positional value {0} in: {1}", position, template);
+                    else
+                        result[position] = ConstructProperty(property, messageTemplateParameters[position]);
+                }
+            }
+
+            var next = 0;
+            for (var i = 0; i < result.Length; ++i)
+            {
+                if (!result[i].Equals(EventProperty.None))
+                {
+                    result[next] = result[i];
+                    ++next;
+                }
+            }
+
+            if (next != result.Length)
+                Array.Resize(ref result, next);
+
+            return result;
+        }
+
+        EventProperty[] ConstructNamedPropertiesWithoutExtraArgs(MessageTemplate template, object[] messageTemplateParameters)
+        {
+            var namedProperties = template.NamedProperties;
+
+            if (namedProperties == null)
+                return NoProperties;
+
+            var matchedRun = namedProperties.Length;
+            if (namedProperties.Length != messageTemplateParameters.Length)
+            {
+                matchedRun = Math.Min(namedProperties.Length, messageTemplateParameters.Length);
+                SelfLog.WriteLine("Named property count does not match parameter count: {0}", template);
+            }
+
+            var result = new EventProperty[messageTemplateParameters.Length];
+            for (var i = 0; i < matchedRun; ++i)
+            {
+                var property = template.NamedProperties[i];
+                var value = messageTemplateParameters[i];
+                result[i] = ConstructProperty(property, value);
+            }
+
+            for (var i = matchedRun; i < messageTemplateParameters.Length; ++i)
+            {
+                var value = _valueConverter.CreatePropertyValue(messageTemplateParameters[i]);
+                result[i] = new("__" + i, value);
+            }
+            return result;
+        }
         public EventProperty[] ConstructProperties(MessageTemplate messageTemplate, object?[]? messageTemplateParameters)
         {
             if (messageTemplateParameters == null || messageTemplateParameters.Length == 0)
@@ -59,6 +141,9 @@ namespace Serilog.Capturing
         EventProperty[] ConstructPositionalProperties(MessageTemplate template, object?[] messageTemplateParameters)
         {
             var positionalProperties = template.PositionalProperties;
+
+            if (messageTemplateParameters.Length > template.PositionalProperties.Length)
+                SelfLog.WriteLine("Extra arguments");
 
             if (positionalProperties.Length != messageTemplateParameters.Length)
                 SelfLog.WriteLine("Positional property count does not match parameter count: {0}", template);
@@ -94,6 +179,10 @@ namespace Serilog.Capturing
         EventProperty[] ConstructNamedProperties(MessageTemplate template, object[] messageTemplateParameters)
         {
             var namedProperties = template.NamedProperties;
+
+            if (messageTemplateParameters.Length > namedProperties.Length)
+                SelfLog.WriteLine("Extra arguments");
+
             if (namedProperties == null)
                 return NoProperties;
 

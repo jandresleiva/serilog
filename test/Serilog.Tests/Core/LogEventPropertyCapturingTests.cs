@@ -1,4 +1,4 @@
-﻿using Serilog.Capturing;
+using Serilog.Capturing;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
@@ -29,6 +29,25 @@ namespace Serilog.Tests.Core
                 new[] { new LogEventProperty("0", new ScalarValue("world")) },
                 Capture("Hello {0}", "world"),
                 new LogEventPropertyStructuralEqualityComparer());
+        }
+
+        [Fact]
+        public void ProvidingMoreParametersThanPositionalPropertiesInTheTemplateWorksAndSelfLogs()
+        {
+            var selfLogOutput = new List<string>();
+            SelfLog.Enable(selfLogOutput.Add);
+
+            Assert.Equal(new[]
+                {
+                    new LogEventProperty("0", new ScalarValue("who")),
+                },
+                Capture("Hello {0}", "who", "what"), // Extra "what"
+                new LogEventPropertyStructuralEqualityComparer());
+
+            Assert.Single(selfLogOutput,
+                s => s.EndsWith("Extra arguments"));
+
+            SelfLog.Disable();
         }
 
         [Fact]
@@ -86,6 +105,26 @@ namespace Serilog.Tests.Core
 
             Assert.Single(selfLogOutput,
                 s => s.EndsWith("Named property count does not match parameter count: Hello {who} {what} {where}"));
+
+            SelfLog.Disable();
+        }
+
+        [Fact]
+        public void ProvidingMoreParametersThanNamedPropertiesInTheTemplateWorksAndSelfLogs()
+        {
+            var selfLogOutput = new List<string>();
+            SelfLog.Enable(selfLogOutput.Add);
+
+            Assert.Equal(new[]
+                {
+                    new LogEventProperty("who", new ScalarValue("who")),
+                    new LogEventProperty("__1", new ScalarValue("what")),
+                },
+                Capture("Hello {who}", "who", "what"), // Extra "what"
+                new LogEventPropertyStructuralEqualityComparer());
+
+            Assert.Single(selfLogOutput,
+                s => s.EndsWith("Extra arguments"));
 
             SelfLog.Disable();
         }
@@ -171,6 +210,29 @@ namespace Serilog.Tests.Core
                     new LogEventProperty("what", new ScalarValue("what")),
                 },
                 Capture("Hello {who} {what} {where}", "who", "what"), // missing "where"
+                new LogEventPropertyStructuralEqualityComparer());
+        }
+
+        [Fact]
+        public void WontCaptureProvidedPositionalValuesEvenIfThereAreTooManyArguments()
+        {
+            Assert.Equal(new[]
+                {
+                    new LogEventProperty("0", new ScalarValue(0)),
+                },
+                Capture("Hello {0}", 0, 1), // extra 1
+                new LogEventPropertyStructuralEqualityComparer());
+        }
+
+        [Fact]
+        public void WillCaptureProvidedNamedValuesEvenIfThereAreTooManyArguments()
+        {
+            Assert.Equal(new[]
+                {
+                    new LogEventProperty("who", new ScalarValue("who")),
+                    new LogEventProperty("__1", new ScalarValue("what")),
+                },
+                Capture("Hello {who}", "who", "what"), // extra "what"
                 new LogEventPropertyStructuralEqualityComparer());
         }
 
